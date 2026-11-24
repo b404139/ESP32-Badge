@@ -33,7 +33,7 @@ void interaction_send(const input_event_t *ev)
         static const char *names[] = {
             "TAP", "DOUBLE", "STROKE", "STROKE_END", "HOLD_BEGIN", "HOLD_END",
             "SWIPE", "PAT", "SHAKE", "TILT", "PICKUP", "PUTDOWN",
-            "BLOW", "CLAP", "VOICE",
+            "BLOW", "CLAP", "VOICE", "PWR",
         };
         const char *n = (ev->type >= 0 && ev->type < (int)(sizeof(names) / sizeof(names[0])))
                             ? names[ev->type] : "?";

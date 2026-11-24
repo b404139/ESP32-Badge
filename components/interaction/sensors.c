@@ -3,6 +3,7 @@
 #include "bsp/esp-bsp.h"
 #include "esp_lcd_touch.h"
 #include "esp_codec_dev.h"
+#include "driver/i2c_master.h"
 #include "qmi8658.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
@@ -20,6 +21,7 @@
 static esp_lcd_touch_handle_t s_tp;
 static qmi8658_dev_t *s_imu;
 static esp_codec_dev_handle_t s_mic;
+static i2c_master_dev_handle_t s_pwr;
 static bool s_hw_inited;
 static volatile bool s_sensors_running;
 static volatile bool s_mic_running;
@@ -36,6 +38,7 @@ static void sensor_task(void *arg)
     float lp_mag = 9.81f, gx = 0, gy = 0, gz = 9.81f, shake_acc = 0;
     uint32_t last_pat = 0, last_shake = 0, last_tilt = 0, ff_ms = 0;
     bool ff = false, pickup_sent = false;
+    uint32_t last_pwr_click = 0;
     float last_nx = 0, last_ny = 0;
 
     while (s_sensors_running) {
@@ -172,6 +175,20 @@ static void sensor_task(void *arg)
                 }
             }
         }
+        if (s_pwr && (tick % 5) == 0) {
+            const uint8_t reg = 0x49;
+            uint8_t status = 0;
+            if (i2c_master_transmit_receive(s_pwr, &reg, 1, &status, 1, 50) == ESP_OK && (status & 0x08)) {
+                const uint8_t clear[] = {0x49, 0x08};
+                i2c_master_transmit(s_pwr, clear, sizeof(clear), 50);
+                if (now - last_pwr_click > 250) {
+                    last_pwr_click = now;
+                    input_event_t ev = { .type = EV_BUTTON_PWR, .ts = now };
+                    interaction_send(&ev);
+                    ESP_LOGI(TAG, "PWR short press");
+                }
+            }
+        }
         tick++;
         vTaskDelay(pdMS_TO_TICKS(10));
     }
@@ -270,6 +287,35 @@ esp_err_t sensors_init(void)
     qmi8658_set_accel_unit_mps2(s_imu, true);
     qmi8658_write_register(s_imu, QMI8658_CTRL5, 0x03);
 
+    const i2c_device_config_t pwr_cfg = {
+        .device_address = 0x34,
+        .scl_speed_hz = 400000,
+    };
+    ret = i2c_master_bus_add_device(bsp_i2c_get_handle(), &pwr_cfg, &s_pwr);
+    if (ret == ESP_OK) {
+        const uint8_t reg = 0x41;
+        uint8_t enabled = 0;
+        ret = i2c_master_transmit_receive(s_pwr, &reg, 1, &enabled, 1, 100);
+        if (ret == ESP_OK) {
+            const uint8_t set[] = {0x41, enabled | 0x08};
+            ret = i2c_master_transmit(s_pwr, set, sizeof(set), 100);
+        }
+        if (ret == ESP_OK) {
+            const uint8_t clear[] = {0x49, 0x08};
+            ret = i2c_master_transmit(s_pwr, clear, sizeof(clear), 100);
+        }
+        if (ret == ESP_OK) {
+            ESP_LOGI(TAG, "AXP2101 PWR short-press IRQ enabled");
+        }
+    }
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "AXP2101 PWR key unavailable (%d); PWR click disabled", ret);
+        if (s_pwr) {
+            i2c_master_bus_rm_device(s_pwr);
+            s_pwr = NULL;
+        }
+    }
+
     s_mic = bsp_audio_codec_microphone_init();
     if (!s_mic) {
         return ESP_FAIL;
@@ -285,7 +331,7 @@ esp_err_t sensors_init(void)
     }
     esp_codec_dev_set_in_gain(s_mic, 24.0f);
     s_hw_inited = true;
-    ESP_LOGI(TAG, "touch + imu + mic ready");
+    ESP_LOGI(TAG, "touch + imu + mic ready (PWR %s)", s_pwr ? "enabled" : "disabled");
     return ESP_OK;
 }
 

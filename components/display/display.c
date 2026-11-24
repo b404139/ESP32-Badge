@@ -16,7 +16,7 @@
 #define TAG "display"
 #define W DISPLAY_W
 #define H DISPLAY_H
-#define STRIP_ROWS 16
+#define STRIP_ROWS 128
 
 static esp_lcd_panel_handle_t s_panel;
 static esp_lcd_panel_io_handle_t s_io;
@@ -265,32 +265,51 @@ esp_err_t display_init(void)
 // PSRAM frame buffers are not DMA-capable, so flush via one internal DMA strip,
 // waiting for each transfer to finish before reusing it. The CO5300 expects RGB565
 // most-significant byte first, so swap each pixel out of the ESP32's little-endian order.
-void display_flush(const uint16_t *fb)
+void display_flush_rect(const uint16_t *fb, int x0, int y0, int width, int height)
 {
-    for (int y = 0; y < H; y += STRIP_ROWS) {
-        int rows = (H - y < STRIP_ROWS) ? (H - y) : STRIP_ROWS;
-        const uint16_t *src = fb + (size_t)y * W;
+    if (!fb || width <= 0 || height <= 0 || x0 < 0 || y0 < 0 ||
+        x0 + width > W || y0 + height > H) {
+        return;
+    }
+    // CO5300 QSPI updates require an even start and an odd inclusive end.
+    int x1 = x0 + width;
+    int y1 = y0 + height;
+    x0 &= ~1;
+    y0 &= ~1;
+    x1 = (x1 + 1) & ~1;
+    y1 = (y1 + 1) & ~1;
+    width = x1 - x0;
+    height = y1 - y0;
+    for (int y = 0; y < height; y += STRIP_ROWS) {
+        int rows = (height - y < STRIP_ROWS) ? (height - y) : STRIP_ROWS;
+        const uint16_t *src = fb + (size_t)(y0 + y) * W + x0;
         for (int r = 0; r < rows; r++) {
-            int yy = y + r;
-            const uint16_t *row = src + (size_t)r * W;
-            uint16_t *dst = s_strip + (size_t)r * W;
+            int yy = y0 + y + r;
+            const uint16_t *row = src + (size_t)(r) * W;
+            uint16_t *dst = s_strip + (size_t)(r) * width;
             if (s_dbg_on && yy >= DBG_Y0 && yy < DBG_Y0 + DBG_H) {
                 const uint8_t *m = s_dbg_mask[yy - DBG_Y0];
-                for (int x = 0; x < W; x++) {
-                    uint16_t v = (m[x >> 3] & (0x80 >> (x & 7))) ? 0xFFFF : 0x0000;
+                for (int x = 0; x < width; ++x) {
+                    int xx = x0 + x;
+                    uint16_t v = (m[xx >> 3] & (0x80 >> (xx & 7))) ? 0xFFFF : 0x0000;
                     dst[x] = (uint16_t)((v >> 8) | (v << 8));
                 }
             } else {
-                for (int x = 0; x < W; x++) {
+                for (int x = 0; x < width; ++x) {
                     uint16_t v = row[x];
                     dst[x] = (uint16_t)((v >> 8) | (v << 8));
                 }
             }
         }
-        if (esp_lcd_panel_draw_bitmap(s_panel, 0, y, W, y + rows, s_strip) == ESP_OK) {
+        if (esp_lcd_panel_draw_bitmap(s_panel, x0, y0 + y, x0 + width, y0 + y + rows, s_strip) == ESP_OK) {
             xSemaphoreTake(s_refresh_sem, portMAX_DELAY);
         }
     }
+}
+
+void display_flush(const uint16_t *fb)
+{
+    display_flush_rect(fb, 0, 0, W, H);
 }
 
 void display_on(bool on)

@@ -24,8 +24,8 @@ void app_main(void)
     interaction_start();
 
     ESP_ERROR_CHECK(app_framework_init());
-    ESP_ERROR_CHECK(app_framework_register(&gif_app));
     ESP_ERROR_CHECK(app_framework_register(&grokbot_app));
+    ESP_ERROR_CHECK(app_framework_register(&gif_app));
     ESP_ERROR_CHECK(app_framework_start());
-    ESP_LOGI(TAG, "apps registered: gif, grokbot (hold BOOT 2s to switch)");
+    ESP_LOGI(TAG, "apps registered: grokbot, gif (BOOT click=switch, hold=debug)");
 }

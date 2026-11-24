@@ -18,6 +18,7 @@ typedef enum {
     EV_TOUCH_SWIPE, /* x,y = net displacement in pixels (directional drag) */
     EV_IMU_PAT, EV_IMU_SHAKE, EV_IMU_TILT, EV_IMU_PICKUP, EV_IMU_PUTDOWN,
     EV_MIC_BLOW, EV_MIC_CLAP, EV_MIC_VOICE,
+    EV_BUTTON_PWR,
 } input_event_type_t;
 
 typedef struct {

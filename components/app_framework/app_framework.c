@@ -49,15 +49,14 @@ static void button_task(void *arg)
         if (gpio_get_level(BOOT_GPIO) == 0) {
             held_ms += 50;
             if (held_ms == HOLD_MS) {
-                app_framework_next();
-            }
-        } else {
-            // Short press (released before the 2s app-switch hold) toggles the
-            // on-screen debug overlay.
-            if (held_ms >= 100 && held_ms < HOLD_MS) {
                 bool on = !display_debug_enabled();
                 display_debug_enable(on);
-                display_debug_set_line(0, on ? "DBG ON (BOOT TAP=OFF)" : "");
+                display_debug_set_line(0, on ? "DBG ON" : "");
+                ESP_LOGI(TAG, "debug overlay %s", on ? "on" : "off");
+            }
+        } else {
+            if (held_ms >= 50 && held_ms < HOLD_MS) {
+                app_framework_next();
             }
             held_ms = 0;
         }

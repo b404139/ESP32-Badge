@@ -19,6 +19,9 @@ esp_err_t display_init(void);
 // Flush a full DISPLAY_W x DISPLAY_H RGB565 (little-endian) framebuffer.
 void display_flush(const uint16_t *fb);
 
+// Flush a rectangular region; coordinates are framebuffer-relative.
+void display_flush_rect(const uint16_t *fb, int x, int y, int width, int height);
+
 void display_on(bool on);
 
 // Idempotent touch bring-up shared by all apps.

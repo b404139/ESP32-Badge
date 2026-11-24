@@ -238,6 +238,11 @@ static void input_task(void *arg)
             sfx_play(SFX_BOOP);
             ESP_LOGI(TAG, "shake -> next");
             break;
+        case EV_BUTTON_PWR:
+            s_switch_req = 1;
+            sfx_play(SFX_BOOP);
+            ESP_LOGI(TAG, "PWR -> next GIF");
+            break;
         case EV_IMU_PICKUP:
             s_paused = true;
             sfx_play(SFX_YAWN);

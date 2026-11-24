@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 
 class GrokBotPlayer {
 public:
@@ -17,7 +18,7 @@ public:
     GrokBotPlayer(const GrokBotPlayer &) = delete;
     GrokBotPlayer &operator=(const GrokBotPlayer &) = delete;
 
-    bool init(const uint8_t *data, size_t size);
+    bool init(const char *path);
     void release();
 
     int clip_count() const { return clip_count_; }
@@ -45,19 +46,21 @@ public:
 
 private:
     struct ClipInfo {
-        const char *name;
-        uint16_t frames;
-        uint16_t start_frame;
-        uint32_t offset;
-        uint32_t size;
-        uint32_t packed_frame_size;
+        char name[17] = {};
+        uint16_t frames = 0;
+        uint16_t start_frame = 0;
+        uint32_t offset = 0;
+        uint32_t size = 0;
+        uint32_t packed_frame_size = 0;
     };
 
     bool frame_info(int frame_index, FrameInfo *frame) const;
     bool decode_frame(const FrameInfo &frame, bool delta);
 
+    FILE *file_ = nullptr;
     const uint8_t *data_ = nullptr;
     size_t data_size_ = 0;
+    uint8_t *clip_data_ = nullptr;
     uint16_t width_ = 0;
     uint16_t height_ = 0;
     uint8_t fps_ = 0;
