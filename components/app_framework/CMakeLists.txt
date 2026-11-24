@@ -1,0 +1,1 @@
+idf_component_register(SRCS "app_framework.c" INCLUDE_DIRS "include" REQUIRES driver display)

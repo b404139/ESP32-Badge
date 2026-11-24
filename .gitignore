@@ -1,0 +1,8 @@
+/build/
+/managed_components/
+/third_party/waveshare/
+/sdkconfig
+/sdkconfig.old
+/sdkconfig.pre32mb
+*.log
+.DS_Store
