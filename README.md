@@ -49,6 +49,8 @@
 - 左右滑动切换、轻点暂停/恢复、双击随机
 - PWR 单击下一张
 - 摇晃/吹气切换、拍手随机、拿起暂停/放下恢复、轻拍播放 boop 音
+- GIF 启动等待首帧刷新完成，2 秒超时返回失败
+- AnimatedGIF `close()` 后清空关闭回调与文件句柄，避免重复 `fclose`
 
 ### 2.3 统一交互层
 
@@ -100,6 +102,8 @@ grokbot_app ──┘
   └─ grokbot_player（GBZ1 流式读取 / zlib / XOR）
 ```
 
+BOOT 单击由 `app_btn` 通知独立 `app_switch` 任务，串行停止、启动应用；启动失败时恢复原应用。
+
 ### 4.1 显示
 
 - 自建 CO5300 QSPI 面板，复用 `esp_lcd_co5300`。
@@ -134,6 +138,7 @@ grokbot_app ──┘
 | `gif_input` | gif | 0 | 5 | 4096 | GIF 输入映射 |
 | `grok_play` | grokbot | 1 | 6 | 16384 | GBZ1 解码、渲染、输入和性能报告 |
 | `app_btn` | framework | 任意 | 3 | 4096 | BOOT 单击切应用 / 长按切 Debug |
+| `app_switch` | framework | 任意 | 3 | 4096 | 串行执行应用停止、启动与失败回滚 |
 
 Grokbot 播放循环每帧至少 `vTaskDelay(1)`，包括亚毫秒等待和丢帧追赶，避免 CPU1 idle task 饥饿触发看门狗。
 

@@ -6,3 +6,4 @@
 /sdkconfig.pre32mb
 *.log
 .DS_Store
+.vscode/

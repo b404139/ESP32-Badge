@@ -8,6 +8,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -45,6 +46,7 @@ static volatile bool s_paused;
 static bool s_first_frame;
 static TaskHandle_t volatile s_play_task;
 static TaskHandle_t volatile s_input_task;
+static SemaphoreHandle_t s_first_frame_sem;
 
 static uint32_t now_ms(void)
 {
@@ -187,6 +189,9 @@ static void play_task(void *arg)
         if (s_first_frame) {
             display_on(true);
             s_first_frame = false;
+            if (s_first_frame_sem) {
+                xSemaphoreGive(s_first_frame_sem);
+            }
         }
         if (first_after_load) {
             ESP_LOGI(TAG, "first frame %u ms", (unsigned)(now_ms() - t0));
@@ -274,6 +279,8 @@ static void input_task(void *arg)
     vTaskDelete(NULL);
 }
 
+static void gif_stop(void);
+
 static esp_err_t gif_start(void)
 {
     esp_err_t ret = display_init();
@@ -293,8 +300,23 @@ static esp_err_t gif_start(void)
     s_paused = false;
     interaction_flush();
     s_running = true;
-    xTaskCreatePinnedToCore(play_task, "gif_play", 8192, NULL, 6, (TaskHandle_t *)&s_play_task, 1);
-    xTaskCreatePinnedToCore(input_task, "gif_input", 4096, NULL, 5, (TaskHandle_t *)&s_input_task, 0);
+    s_first_frame_sem = xSemaphoreCreateBinary();
+    if (!s_first_frame_sem) {
+        gif_stop();
+        return ESP_ERR_NO_MEM;
+    }
+    if (xTaskCreatePinnedToCore(play_task, "gif_play", 8192, NULL, 6, (TaskHandle_t *)&s_play_task, 1) != pdPASS ||
+        xTaskCreatePinnedToCore(input_task, "gif_input", 4096, NULL, 5, (TaskHandle_t *)&s_input_task, 0) != pdPASS) {
+        gif_stop();
+        return ESP_ERR_NO_MEM;
+    }
+    if (xSemaphoreTake(s_first_frame_sem, pdMS_TO_TICKS(2000)) != pdTRUE) {
+        ESP_LOGE(TAG, "first frame timeout");
+        gif_stop();
+        return ESP_FAIL;
+    }
+    vSemaphoreDelete(s_first_frame_sem);
+    s_first_frame_sem = NULL;
     ESP_LOGI(TAG, "gif app started");
     return ESP_OK;
 }
@@ -308,6 +330,10 @@ static void gif_stop(void)
     s_gif.close();
     free(s_framebuf);
     s_framebuf = NULL;
+    if (s_first_frame_sem) {
+        vSemaphoreDelete(s_first_frame_sem);
+        s_first_frame_sem = NULL;
+    }
     ESP_LOGI(TAG, "gif app stopped");
 }
 

@@ -259,8 +259,11 @@ int AnimatedGIF::open(const char *szFilename, GIF_OPEN_CALLBACK *pfnOpen, GIF_CL
 
 void AnimatedGIF::close()
 {
-    if (_gif.pfnClose)
+    if (_gif.pfnClose) {
         (*_gif.pfnClose)(_gif.GIFFile.fHandle);
+        _gif.pfnClose = NULL;
+        _gif.GIFFile.fHandle = NULL;
+    }
 } /* close() */
 
 void AnimatedGIF::reset()

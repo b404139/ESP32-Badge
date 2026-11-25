@@ -13,6 +13,7 @@
 static const app_t *s_apps[APP_MAX];
 static int s_count;
 static int s_current = -1;
+static TaskHandle_t s_switch_task;
 
 void app_framework_next(void)
 {
@@ -21,18 +22,31 @@ void app_framework_next(void)
         return;
     }
     const int previous = s_current;
+    const int next = (s_current + 1) % s_count;
+    ESP_LOGI(TAG, "switch begin %s -> %s", previous >= 0 ? s_apps[previous]->name : "none",
+             s_apps[next]->name);
     if (s_current >= 0 && s_apps[s_current]->stop) {
         s_apps[s_current]->stop();
     }
-    s_current = (s_current + 1) % s_count;
-    ESP_LOGI(TAG, "switch to %s", s_apps[s_current]->name);
-    if (s_apps[s_current]->start() != ESP_OK) {
-        ESP_LOGE(TAG, "%s start failed, restoring %s", s_apps[s_current]->name,
-                 previous >= 0 ? s_apps[previous]->name : "none");
+    s_current = next;
+    esp_err_t ret = s_apps[s_current]->start();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "%s start failed: %s, restoring %s", s_apps[s_current]->name,
+                 esp_err_to_name(ret), previous >= 0 ? s_apps[previous]->name : "none");
         s_current = previous;
         if (previous >= 0) {
             s_apps[previous]->start();
         }
+    } else {
+        ESP_LOGI(TAG, "switch complete %s", s_apps[s_current]->name);
+    }
+}
+
+static void switch_task(void *arg)
+{
+    while (1) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        app_framework_next();
     }
 }
 
@@ -56,7 +70,7 @@ static void button_task(void *arg)
             }
         } else {
             if (held_ms >= 50 && held_ms < HOLD_MS) {
-                app_framework_next();
+                xTaskNotifyGive(s_switch_task);
             }
             held_ms = 0;
         }
@@ -66,7 +80,12 @@ static void button_task(void *arg)
 
 esp_err_t app_framework_init(void)
 {
-    xTaskCreate(button_task, "app_btn", 4096, NULL, 3, NULL);
+    if (xTaskCreate(switch_task, "app_switch", 4096, NULL, 3, &s_switch_task) != pdPASS) {
+        return ESP_ERR_NO_MEM;
+    }
+    if (xTaskCreate(button_task, "app_btn", 4096, NULL, 3, NULL) != pdPASS) {
+        return ESP_ERR_NO_MEM;
+    }
     return ESP_OK;
 }
 
