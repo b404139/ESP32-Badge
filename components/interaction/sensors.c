@@ -1,8 +1,8 @@
 #include "interaction_internal.h"
+#include "audio.h"
 #include "display.h"
 #include "bsp/esp-bsp.h"
 #include "esp_lcd_touch.h"
-#include "esp_codec_dev.h"
 #include "driver/i2c_master.h"
 #include "qmi8658.h"
 #include "esp_log.h"
@@ -198,7 +198,7 @@ static void sensor_task(void *arg)
 
 static void audio_rec_task(void *arg)
 {
-    int16_t *buf = heap_caps_malloc(MIC_FRAME * 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    int16_t *buf = heap_caps_malloc(MIC_FRAME * 2 * sizeof(int16_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (!buf) {
         s_mic_task = NULL;
         vTaskDelete(NULL);
@@ -206,29 +206,34 @@ static void audio_rec_task(void *arg)
     }
     uint32_t blow_ms = 0, voice_ms = 0, last_blow = 0, last_clap = 0, last_voice = 0;
     while (s_mic_running) {
-        if (esp_codec_dev_read(s_mic, buf, MIC_FRAME * 2) != ESP_OK) {
+        if (esp_codec_dev_read(s_mic, buf, MIC_FRAME * 2 * sizeof(int16_t)) != ESP_OK) {
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
-        float sum = 0, zc = 0;
-        for (int i = 0; i < MIC_FRAME; i++) {
-            float s = buf[i] / 32768.0f;
-            sum += s * s;
-            if (i && ((buf[i] >= 0) != (buf[i - 1] >= 0))) {
-                zc++;
+        float sums[2] = {0}, crossings[2] = {0};
+        for (int ch = 0; ch < 2; ch++) {
+            const int slot = ch;
+            for (int i = 1; i < MIC_FRAME; i++) {
+                float sample = buf[i * 2 + slot] / 32768.0f;
+                sums[ch] += sample * sample;
+                if ((buf[i * 2 + slot] >= 0) != (buf[(i - 1) * 2 + slot] >= 0)) {
+                    crossings[ch]++;
+                }
             }
         }
-        float rms = sqrtf(sum / MIC_FRAME);
-        float zcr = zc / MIC_FRAME;
+        float rms1 = sqrtf(sums[0] / MIC_FRAME);
+        float rms2 = sqrtf(sums[1] / MIC_FRAME);
+        float rms = fmaxf(rms1, rms2);
+        float zcr = (crossings[0] + crossings[1]) / (2.0f * MIC_FRAME);
         uint32_t now = interaction_now_ms();
         if (display_debug_enabled()) {
             static uint32_t last_dbg = 0;
             if (now - last_dbg > 300) {
                 last_dbg = now;
                 char line[48];
-                snprintf(line, sizeof(line), "MIC rms=%.2f zcr=%.2f", rms, zcr);
+                snprintf(line, sizeof(line), "MIC1=%.3f MIC2=%.3f", rms1, rms2);
                 display_debug_set_line(2, line);
-                ESP_LOGI(TAG, "mic rms=%.3f zcr=%.3f", rms, zcr);
+                ESP_LOGI(TAG, "mic1 rms=%.3f mic2 rms=%.3f zcr=%.3f", rms1, rms2, zcr);
             }
         }
         if (rms > 0.05f && zcr < 0.10f) {
@@ -316,20 +321,34 @@ esp_err_t sensors_init(void)
         }
     }
 
-    s_mic = bsp_audio_codec_microphone_init();
-    if (!s_mic) {
+    if (!s_pwr) {
         return ESP_FAIL;
     }
-    esp_codec_dev_sample_info_t fs = {
-        .sample_rate = 24000,
-        .channel = 2, /* ES7210 is a multi-channel ADC; mono config yields no data */
-        .bits_per_sample = 16,
+    const uint8_t power_init[][2] = {
+        {0x80, 0x01}, {0x90, 0x00}, {0x91, 0x00},
+        {0x82, 0x12}, {0x92, 0x1c}, {0x90, 0x01},
     };
-    ret = esp_codec_dev_open(s_mic, &fs);
+    for (size_t i = 0; i < sizeof(power_init) / sizeof(power_init[0]); i++) {
+        ret = i2c_master_transmit(s_pwr, power_init[i], sizeof(power_init[i]), 100);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "AXP2101 microphone power init failed: %s", esp_err_to_name(ret));
+            return ret;
+        }
+    }
+    vTaskDelay(pdMS_TO_TICKS(2000));
+    uint8_t ldo_readback = 0, voltage_readback = 0;
+    i2c_master_transmit_receive(s_pwr, &(const uint8_t){0x90}, 1, &ldo_readback, 1, 100);
+    i2c_master_transmit_receive(s_pwr, &(const uint8_t){0x92}, 1, &voltage_readback, 1, 100);
+    ESP_LOGI(TAG, "AXP2101 ALDO1 enabled at 3.3V (0x90=%02x 0x92=%02x)", ldo_readback, voltage_readback);
+
+    ret = audio_init();
     if (ret != ESP_OK) {
         return ret;
     }
-    esp_codec_dev_set_in_gain(s_mic, 24.0f);
+    s_mic = audio_microphone();
+    if (!s_mic) {
+        return ESP_FAIL;
+    }
     s_hw_inited = true;
     ESP_LOGI(TAG, "touch + imu + mic ready (PWR %s)", s_pwr ? "enabled" : "disabled");
     return ESP_OK;

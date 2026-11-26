@@ -1,5 +1,5 @@
 #include "interaction_internal.h"
-#include "bsp/esp-bsp.h"
+#include "audio.h"
 #include "esp_codec_dev.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
@@ -82,20 +82,10 @@ esp_err_t sfx_init(void)
     if (s_sfx_inited) {
         return ESP_OK;
     }
-    s_spk = bsp_audio_codec_speaker_init();
+    s_spk = audio_speaker();
     if (!s_spk) {
         return ESP_FAIL;
     }
-    esp_codec_dev_sample_info_t fs = {
-        .sample_rate = RATE,
-        .channel = 1,
-        .bits_per_sample = 16,
-    };
-    esp_err_t ret = esp_codec_dev_open(s_spk, &fs);
-    if (ret != ESP_OK) {
-        return ret;
-    }
-    esp_codec_dev_set_out_vol(s_spk, 70);
     s_pcm = heap_caps_malloc(MAX_SAMPLES * sizeof(int16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!s_pcm) {
         return ESP_ERR_NO_MEM;

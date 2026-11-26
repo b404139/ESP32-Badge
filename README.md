@@ -16,18 +16,55 @@
 | Flash | 物理 32MB，QIO @ 80MHz |
 | 屏幕 | 1.75" 圆形 AMOLED，466×466，RGB565，CO5300，QSPI |
 | 触摸 | CST9217 电容触摸，I2C |
-| IMU | QMI8658 6 轴，I2C，本项目使用加速度 |
-| 音频 | ES8311 扬声器 + ES7210 双通道麦克风，I2S 24kHz/16bit |
+| IMU | QMI8658C 6 轴，I2C，本项目使用加速度 |
+| 音频 | ES8311 扬声器 + ES7210 双麦克风，I2S 24kHz/16bit；TX 标准单声道，RX 四槽 TDM 双麦 |
 | 调试串口 | USB-Serial/JTAG，UART0 GPIO44/43 |
 
 关键引脚：
 
-- LCD QSPI：CS=12，PCLK=38，D0=4，D1=5，D2=6，D3=7，RST=39
+- LCD QSPI：CS=12，PCLK=38，D0=4，D1=5，D2=6，D3=7，RST=1
 - I2C：SCL=14，SDA=15
-- I2S：MCLK=42，SCLK=9，LCLK=45，DOUT=8，DSIN=10，PA=46
-- 触摸：RST=40，INT=11
+- I2S：MCLK=16（本板实际音频时钟），SCLK=9，LRCK=45，DOUT=8，DSIN=10，PA_CTRL=46
+- 触摸：RST=2，INT=11
 - BOOT：GPIO0，单击切应用 / 长按 2 秒切 Debug
-- PWR：AXP2101（I2C 0x34）短按中断，Grokbot 切下一表情 / GIF 切下一张
+- PWR：官方定义为 SYS_OUT=GPIO3；本项目当前通过 AXP2101（I2C 0x34）短按中断读取
+
+### 1.1 官方 Pin Map
+
+**Waveshare ESP32-S3-Touch-AMOLED-1.75 Pin Map**
+
+| ESP32-S3 | LCD | USB | ES8311 | QMI8658C | SYS | OUT |
+| ---- | ---- | ---- | ---- | ---- | ---- | ---- |
+| GPIO1 | LCD RESET |  |  |  |  |  |
+| GPIO2 | TP RESET |  |  |  |  |  |
+| GPIO3 |  |  |  |  | SYS_OUT |  |
+| GPIO4 | QSPI SIO0 |  |  |  |  |  |
+| GPIO5 | QSPI SIO1 |  |  |  |  |  |
+| GPIO6 | QSPI SIO2 |  |  |  |  |  |
+| GPIO7 | QSPI SIO3 |  |  |  |  |  |
+| GPIO8 |  |  | I2S DSDIN |  |  |  |
+| GPIO9 |  |  | I2S SCLK |  |  |  |
+| GPIO10 |  |  | I2S_ASDOUT |  |  |  |
+| GPIO11 | TP_INT |  |  |  |  |  |
+| GPIO12 | LCD_CS |  |  |  |  |  |
+| GPIO13 | LCD_TE |  |  |  |  |  |
+| GPIO14 | TP_SCL |  |  | ESP32_SCL |  | ESP32_SCL |
+| GPIO15 | TP_SDA |  |  | ESP32_SDA |  | ESP32_SDA |
+| GPIO16 |  |  | I2S_MCLK |  |  |  |
+| GPIO17 |  |  |  |  |  | GPIO17 |
+| GPIO18 |  |  |  |  |  | GPIO18 |
+| GPIO19 |  | USB_N |  |  |  |  |
+| GPIO20 |  | USB_P |  |  |  |  |
+| GPIO21 |  |  |  |  |  |  |
+| GPIO38 | QSPI SCL |  |  | QMI_INT1 |  |  |
+| GPIO39 |  |  |  |  |  | GPIO39 |
+| GPIO40 |  |  |  |  |  | GPIO40 |
+| GPIO41 |  |  |  |  |  | GPIO41 |
+| GPIO42 |  |  |  |  |  | GPIO42 |
+| GPIO43 |  |  |  |  |  | U0TXD |
+| GPIO44 |  |  |  |  |  | U0RXD |
+| GPIO45 |  |  | I2S LRCK |  |  |  |
+| GPIO46 |  |  | PA_CTRL |  |  |  |
 
 ## 2. 应用与交互
 
@@ -56,7 +93,7 @@
 
 触摸、IMU、麦克风和音效任务开机常开，两个应用消费同一事件队列。应用切换时清空旧事件，避免输入串扰。
 
-Debug overlay 位于屏幕中部，显示事件、麦克风 RMS/ZCR、IMU 数据、ROLL/PITCH；Grokbot 额外显示当前状态、FPS、解码耗时和空闲 PSRAM。
+Debug overlay 位于屏幕中部，显示事件、两路麦克风 MIC1/MIC2 RMS、IMU 数据、ROLL/PITCH；Grokbot 额外显示当前状态、FPS、解码耗时和空闲 PSRAM。
 
 ## 3. 编译、烧录与监视
 
@@ -127,7 +164,22 @@ BOOT 单击由 `app_btn` 通知独立 `app_switch` 任务，串行停止、启�
 - packed/delta 各 96.8KB，上一帧 packed 缓冲 96.8KB，显示帧约 434KB；播放任务 core1、优先级 6、栈 16KB
 - 性能日志分别报告 zlib 解码、脏区检测/绘制和 QSPI 刷新耗时，便于定位帧率瓶颈
 
-### 4.3 任务
+### 4.3 音频与麦克风
+
+- 参考小智 2.6.0 同板实现，I2S0 主模式使用 TX 标准声道与 RX 四槽 TDM 声道，MCLK=GPIO16（6.144MHz），24kHz/16bit。
+- ES7210 选择 MIC1–MIC4，TDM 槽顺序为 MIC1 / MIC3 / MIC2 / MIC4；录音通过 `channel_mask=0x5` 只取槽 0、2，即两路板载麦克风。
+- AXP2101 先关闭 LDO 群，再设置 DC1=3.3V、ALDO1=3.3V 并单独开启 ALDO1，等待 2 秒后初始化 ES7210。
+- 录音固定使用 240 帧、双通道缓冲；检测事件取两路 RMS 较大值，ZCR 取两路平均。
+- 扬声器由 ES8311 单声道输出，先打开 TDM 录音再打开标准播放，两端共用同一 I2S 数据接口。
+
+#### 根因与验证记录
+
+- **根本原因是实际 MCLK 时钟引脚为 GPIO16，而不是 BSP 默认的 GPIO42。** GPIO42 方案下 ES7210 收不到有效主时钟，SDOUT 始终保持全零；ES8311 也只能输出杂音。切到 GPIO16 后，同一份代码立即恢复麦克风数据和正常音频。
+- 该现象与 Debug 面板、应用层、ESP-IDF 小版本无关：独立最小 echo 在 ESP-IDF 5.5.2 和 6.1.1 下使用 GPIO42 均失败，改用 GPIO16 后均通过。
+- 配套条件：ES7210 使用四槽 TDM，双麦选择槽 0/2（`channel_mask=0x5`）；AXP2101 ALDO1 设为 3.3V 并等待 2 秒；先开录音、再开单声道播放。
+- 验证证据：最小固件在 GPIO16 下 2 秒脉冲正常、说话有回声；正式固件 Debug 中 MIC1/MIC2 安静时约 0.001，发声时分别升到 0.03–0.26。
+
+### 4.4 任务
 
 | 任务 | 所属 | 核心 | 优先级 | 栈 | 说明 |
 | --- | --- | --- | --- | --- | --- |
