@@ -114,12 +114,12 @@ cmd //c "build.bat -p COM16 app-flash"
 
 ### 3.1 单文件 Release 固件
 
-Release 提供 `ESP32-Badge-V0.1.1.bin`，镜像从 `0x0` 开始，已包含 bootloader、分区表、应用和全部媒体，文件大小固定为 32MiB。烧录时选择 ESP32-S3、32MB Flash、DIO、80MHz，写入地址填 `0x0`：
+Release 提供 `ESP32-Badge-V0.1.2.bin`，镜像从 `0x0` 开始，已包含 bootloader、分区表、应用和全部媒体，文件大小固定为 32MiB。烧录时选择 ESP32-S3、32MB Flash、DIO、80MHz，写入地址填 `0x0`：
 
 ```bash
 python -m esptool --chip esp32s3 --port COM16 --baud 460800 \
   write_flash --flash_mode dio --flash_freq 80m --flash_size 32MB \
-  0x0 release/ESP32-Badge-V0.1.1.bin
+  0x0 release/ESP32-Badge-V0.1.2.bin
 ```
 
 Flash Download Tool **3.9.11 已验证可烧录**该单文件镜像：选择 ESP32-S3，Flash 为 32MB，SPI Mode 为 DIO、SPI Speed 为 80MHz，勾选 `DoNotChgBin`，bin 地址填 `0x0`，COM 选择实际端口，BAUD 使用 460800。3.9.5 对同一镜像会在 `esp_write_flash` 阶段失败，建议改用 3.9.11。
@@ -128,7 +128,7 @@ Flash Download Tool **3.9.11 已验证可烧录**该单文件镜像：选择 ESP
 
 ```bash
 cmd //c "build.bat build"
-python tool/make_release.py --output release/ESP32-Badge-V0.1.1.bin
+python tool/make_release.py --output release/ESP32-Badge-V0.1.2.bin
 ```
 
 镜像布局：`0x0` bootloader、`0x8000` 分区表、`0x10000` factory 应用、`0x210000` SPIFFS 媒体。完整镜像会覆盖设备上的 NVS，烧录前备份需要保留的数据。
@@ -272,4 +272,4 @@ badge/
 - Grokbot 原理站：https://grokbot.yin.wiki/
 - Grokbot 固件参考：https://github.com/Ocean-lhy/Stopwatch-GrokBot
 
-参考仓库未提供 LICENSE。Grokbot 角色和图集的再分发须遵守授权持有者许可；本次 V0.1.1 公开发布已由用户确认获得公开再分发授权。`tool/grokbot_atlas.py` 与本节保留来源和哈希提示。
+参考仓库未提供 LICENSE。Grokbot 角色和图集的再分发须遵守授权持有者许可；本次 V0.1.2 公开发布已由用户确认获得公开再分发授权。`tool/grokbot_atlas.py` 与本节保留来源和哈希提示。
