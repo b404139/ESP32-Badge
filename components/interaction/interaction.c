@@ -26,6 +26,10 @@ void interaction_send(const input_event_t *ev)
     if (sensors_motion_active() && ev->type != EV_BUTTON_PWR) {
         return;
     }
+    if ((ev->type == EV_MIC_BLOW || ev->type == EV_MIC_CLAP || ev->type == EV_MIC_VOICE) &&
+        sfx_input_guard_active()) {
+        return;
+    }
     static const char *names[] = {
         "TAP", "DOUBLE", "STROKE", "STROKE_END", "HOLD_BEGIN", "HOLD_END",
         "SWIPE", "PAT", "TILT", "PICKUP", "PUTDOWN",

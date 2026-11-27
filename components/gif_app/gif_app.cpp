@@ -229,9 +229,9 @@ static void input_task(void *arg)
             ESP_LOGI(TAG, "swipe dx=%.0f -> %s", ev.x, ev.x < 0 ? "next" : "prev");
             break;
         case EV_TOUCH_TAP:
-            s_paused = !s_paused;
+            s_switch_req = 1;
             sfx_play(SFX_BOOP);
-            ESP_LOGI(TAG, "tap -> %s", s_paused ? "pause" : "resume");
+            ESP_LOGI(TAG, "tap -> next");
             break;
         case EV_TOUCH_DOUBLE:
             s_random_req = true;

@@ -15,6 +15,7 @@ bool sensors_motion_active(void);
 esp_err_t sfx_init(void);
 void sfx_start(void);
 void sfx_stop(void);
+bool sfx_input_guard_active(void);
 
 #ifdef __cplusplus
 }

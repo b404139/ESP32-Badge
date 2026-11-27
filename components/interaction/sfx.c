@@ -19,6 +19,7 @@ static QueueHandle_t s_q;
 static int16_t *s_pcm;
 static bool s_sfx_inited;
 static volatile bool s_sfx_running;
+static volatile uint32_t s_input_guard_until;
 static TaskHandle_t volatile s_sfx_task;
 
 static void gen(sfx_id_t id, int *out_n)
@@ -70,6 +71,7 @@ static void sfx_task(void *arg)
         if (xQueueReceive(s_q, &id, pdMS_TO_TICKS(100)) == pdTRUE) {
             int n = 0;
             gen(id, &n);
+            s_input_guard_until = interaction_now_ms() + (uint32_t)(n * 1000 / RATE) + 200;
             esp_codec_dev_write(s_spk, s_pcm, n * sizeof(int16_t));
         }
     }
@@ -110,6 +112,11 @@ void sfx_stop(void)
     while (s_sfx_task) {
         vTaskDelay(pdMS_TO_TICKS(2));
     }
+}
+
+bool sfx_input_guard_active(void)
+{
+    return interaction_now_ms() < s_input_guard_until;
 }
 
 void sfx_play(sfx_id_t id)

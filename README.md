@@ -83,7 +83,7 @@
 
 - 6 个 466×466 GIF：`idle / happy / playful / sad / shock / sleepy`
 - SPIFFS 流式解码，AnimatedGIF COOKED 模式直接满屏刷新
-- 左右滑动切换、轻点暂停/恢复、双击随机
+- 左右滑动切换、轻点下一张、双击随机
 - PWR 单击下一张
 - 吹气切换、拍手随机、拿起暂停/放下恢复、轻拍播放 boop 音
 - GIF 启动等待首帧刷新完成，2 秒超时返回失败

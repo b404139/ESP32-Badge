@@ -19,7 +19,6 @@ static const char *TAG = "grokbot";
 static constexpr const char *kAtlasPath = "/spiffs/grokbot.atlas";
 static constexpr int kCanvasSize = 440;
 static constexpr int kOffset = (DISPLAY_W - kCanvasSize) / 2;
-static constexpr uint32_t kDebounceMs = 1500;
 
 static GrokBotPlayer s_player;
 static uint16_t *s_framebuf;
@@ -38,7 +37,6 @@ static bool s_reverse;
 static bool s_first_frame;
 static bool s_debug_was_on;
 static int s_manual_index;
-static uint32_t s_last_switch_ms;
 static uint32_t s_last_tilt_ms;
 static TaskHandle_t volatile s_play_task;
 
@@ -118,57 +116,45 @@ static void process_inputs(void)
     input_event_t ev;
     while (xQueueReceive(interaction_queue(), &ev, 0) == pdTRUE) {
         const uint32_t now = interaction_now_ms();
-        if (now - s_last_switch_ms < kDebounceMs) {
-            continue;
-        }
         switch (ev.type) {
         case EV_TOUCH_TAP:
             if (ev.v > 0.0f && ev.v >= 500.0f) {
                 break;
             }
-            s_last_switch_ms = now;
             switch_state(1);
             sfx_play(SFX_BOOP);
             break;
         case EV_TOUCH_SWIPE:
-            s_last_switch_ms = now;
             switch_state(ev.x < 0.0f ? 1 : -1);
             sfx_play(SFX_BOOP);
             break;
         case EV_TOUCH_DOUBLE:
-            s_last_switch_ms = now;
             random_state();
             sfx_play(SFX_GIGGLE);
             break;
         case EV_IMU_PAT:
-            s_last_switch_ms = now;
             switch_state(1);
             sfx_play(SFX_BOOP);
             break;
         case EV_MIC_BLOW:
-            s_last_switch_ms = now;
             switch_state(1);
             sfx_play(SFX_GIGGLE);
             break;
         case EV_MIC_CLAP:
-            s_last_switch_ms = now;
             random_state();
             sfx_play(SFX_BOOP);
             break;
         case EV_BUTTON_PWR:
-            s_last_switch_ms = now;
             switch_state(1);
             sfx_play(SFX_BOOP);
             break;
         case EV_MIC_VOICE:
-            s_last_switch_ms = now;
             if (switch_named("listening", now)) {
                 sfx_play(SFX_GIGGLE);
             }
             break;
         case EV_IMU_TILT:
             if (ev.v >= 0.45f && strcmp(s_player.selected_name(), "curious") != 0) {
-                s_last_switch_ms = now;
                 if (switch_named("curious", now)) {
                     sfx_play(SFX_BOOP);
                 }
@@ -443,7 +429,6 @@ static esp_err_t grokbot_start(void)
     s_paused = false;
     s_first_frame = true;
     s_debug_was_on = false;
-    s_last_switch_ms = 0;
     s_last_tilt_ms = 0;
     s_decode_total_us = 0;
     s_draw_total_us = 0;
