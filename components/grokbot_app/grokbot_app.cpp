@@ -19,7 +19,7 @@ static const char *TAG = "grokbot";
 static constexpr const char *kAtlasPath = "/spiffs/grokbot.atlas";
 static constexpr int kCanvasSize = 440;
 static constexpr int kOffset = (DISPLAY_W - kCanvasSize) / 2;
-static constexpr uint32_t kDebounceMs = 180;
+static constexpr uint32_t kDebounceMs = 1500;
 
 static GrokBotPlayer s_player;
 static uint16_t *s_framebuf;
@@ -73,6 +73,8 @@ static void apply_state(int index)
     uppercase_name(name, sizeof(name), s_player.clip_name(index));
     snprintf(line, sizeof(line), "GROK %s", name);
     display_debug_set_line(0, line);
+    snprintf(line, sizeof(line), "NO %02d/%02d", index + 1, s_player.clip_count());
+    display_debug_set_line(6, line);
     ESP_LOGI(TAG, "state -> %s", s_player.selected_name());
 }
 
@@ -84,16 +86,18 @@ static void switch_state(int delta)
     }
 }
 
-static void switch_named(const char *name, uint32_t now)
+static bool switch_named(const char *name, uint32_t now)
 {
     if (now - s_last_tilt_ms < 1000) {
-        return;
+        return false;
     }
     s_last_tilt_ms = now;
     const int index = find_state(name);
-    if (index >= 0) {
-        apply_state(index);
+    if (index < 0) {
+        return false;
     }
+    apply_state(index);
+    return true;
 }
 
 static void random_state(void)
@@ -136,7 +140,6 @@ static void process_inputs(void)
             random_state();
             sfx_play(SFX_GIGGLE);
             break;
-        case EV_IMU_SHAKE:
         case EV_IMU_PAT:
             s_last_switch_ms = now;
             switch_state(1);
@@ -159,14 +162,16 @@ static void process_inputs(void)
             break;
         case EV_MIC_VOICE:
             s_last_switch_ms = now;
-            switch_named("listening", now);
-            sfx_play(SFX_GIGGLE);
+            if (switch_named("listening", now)) {
+                sfx_play(SFX_GIGGLE);
+            }
             break;
         case EV_IMU_TILT:
-            if (ev.v >= 0.25f) {
+            if (ev.v >= 0.45f && strcmp(s_player.selected_name(), "curious") != 0) {
                 s_last_switch_ms = now;
-                switch_named("curious", now);
-                sfx_play(SFX_BOOP);
+                if (switch_named("curious", now)) {
+                    sfx_play(SFX_BOOP);
+                }
             }
             break;
         case EV_IMU_PICKUP:
@@ -431,6 +436,9 @@ static esp_err_t grokbot_start(void)
     }
     ESP_LOGI(TAG, "start player ready clips=%d", s_player.clip_count());
     s_manual_index = 0;
+    char debug_line[40];
+    snprintf(debug_line, sizeof(debug_line), "NO %02d/%02d", 1, s_player.clip_count());
+    display_debug_set_line(6, debug_line);
     s_reverse = false;
     s_paused = false;
     s_first_frame = true;

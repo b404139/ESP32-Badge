@@ -17,6 +17,12 @@
 #define TAG "sensors"
 #define MIC_FRAME 240
 #define SWIPE_MIN_PX 80
+#define PAT_HP_MPS2 18.0f
+#define PAT_COOLDOWN_MS 1200
+#define MOTION_ENTER_MPS2 4.0f
+#define MOTION_EXIT_MPS2 2.0f
+#define TILT_MIN_DELTA 0.18f
+#define TILT_COOLDOWN_MS 300
 
 static esp_lcd_touch_handle_t s_tp;
 static qmi8658_dev_t *s_imu;
@@ -25,6 +31,7 @@ static i2c_master_dev_handle_t s_pwr;
 static bool s_hw_inited;
 static volatile bool s_sensors_running;
 static volatile bool s_mic_running;
+static volatile bool s_motion_active;
 static TaskHandle_t volatile s_sensor_task;
 static TaskHandle_t volatile s_mic_task;
 
@@ -35,8 +42,8 @@ static void sensor_task(void *arg)
     uint32_t down_ts = 0, last_tap_ts = 0, last_stroke_ev = 0;
     float stroke_dist = 0;
     uint16_t lx = 0, ly = 0, sx = 0, sy = 0;
-    float lp_mag = 9.81f, gx = 0, gy = 0, gz = 9.81f, shake_acc = 0;
-    uint32_t last_pat = 0, last_shake = 0, last_tilt = 0, ff_ms = 0;
+    float lp_mag = 9.81f, gx = 0, gy = 0, gz = 9.81f, motion_acc = 0;
+    uint32_t last_pat = 0, last_tilt = 0, ff_ms = 0;
     bool ff = false, pickup_sent = false;
     uint32_t last_pwr_click = 0;
     float last_nx = 0, last_ny = 0;
@@ -48,6 +55,12 @@ static void sensor_task(void *arg)
             float mag = sqrtf(d.accelX * d.accelX + d.accelY * d.accelY + d.accelZ * d.accelZ);
             lp_mag += 0.05f * (mag - lp_mag);
             float hp = mag - lp_mag;
+            motion_acc = 0.8f * motion_acc + 0.2f * fabsf(hp);
+            if (motion_acc > MOTION_ENTER_MPS2) {
+                s_motion_active = true;
+            } else if (motion_acc < MOTION_EXIT_MPS2) {
+                s_motion_active = false;
+            }
             if (display_debug_enabled()) {
                 static uint32_t last_dbg = 0;
                 if (now - last_dbg > 300) {
@@ -59,21 +72,16 @@ static void sensor_task(void *arg)
                     float pitch = atan2f(-gx, sqrtf(gy * gy + gz * gz)) * 57.29578f;
                     snprintf(line, sizeof(line), "ROL %+.0f PIT %+.0f", roll, pitch);
                     display_debug_set_line(4, line);
-                    ESP_LOGI(TAG, "imu mag=%.2f hp=%.2f roll=%.1f pitch=%.1f", mag, hp, roll, pitch);
+                    ESP_LOGI(TAG, "imu mag=%.2f hp=%.2f motion=%.2f roll=%.1f pitch=%.1f", mag, hp, motion_acc, roll, pitch);
                 }
             }
             gx += 0.1f * (d.accelX - gx);
             gy += 0.1f * (d.accelY - gy);
             gz += 0.1f * (d.accelZ - gz);
-            if (hp > 12.0f && now - last_pat > 250) {
+            if (hp > PAT_HP_MPS2 && now - last_pat > PAT_COOLDOWN_MS) {
                 last_pat = now;
+                ESP_LOGI(TAG, "pat hp=%.2f", hp);
                 input_event_t ev = { .type = EV_IMU_PAT, .ts = now };
-                interaction_send(&ev);
-            }
-            shake_acc = 0.9f * shake_acc + 0.1f * fabsf(hp);
-            if (shake_acc > 6.0f && now - last_shake > 2000) {
-                last_shake = now;
-                input_event_t ev = { .type = EV_IMU_SHAKE, .ts = now };
                 interaction_send(&ev);
             }
             if (mag < 2.5f) {
@@ -93,14 +101,14 @@ static void sensor_task(void *arg)
                 ff_ms = 0;
                 pickup_sent = false;
             }
-            if (now - last_tilt > 200) {
+            if (now - last_tilt > TILT_COOLDOWN_MS) {
                 last_tilt = now;
                 float nx = gx / 9.81f, ny = gy / 9.81f;
                 if (nx > 1) nx = 1;
                 if (nx < -1) nx = -1;
                 if (ny > 1) ny = 1;
                 if (ny < -1) ny = -1;
-                if (fabsf(nx - last_nx) > 0.08f || fabsf(ny - last_ny) > 0.08f) {
+                if (fabsf(nx - last_nx) > TILT_MIN_DELTA || fabsf(ny - last_ny) > TILT_MIN_DELTA) {
                     last_nx = nx;
                     last_ny = ny;
                     input_event_t ev = {
@@ -352,6 +360,11 @@ esp_err_t sensors_init(void)
     s_hw_inited = true;
     ESP_LOGI(TAG, "touch + imu + mic ready (PWR %s)", s_pwr ? "enabled" : "disabled");
     return ESP_OK;
+}
+
+bool sensors_motion_active(void)
+{
+    return s_motion_active;
 }
 
 void sensors_start(void)

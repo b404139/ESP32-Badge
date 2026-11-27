@@ -23,17 +23,21 @@ QueueHandle_t interaction_queue(void)
 
 void interaction_send(const input_event_t *ev)
 {
+    if (sensors_motion_active() && ev->type != EV_BUTTON_PWR) {
+        return;
+    }
+    static const char *names[] = {
+        "TAP", "DOUBLE", "STROKE", "STROKE_END", "HOLD_BEGIN", "HOLD_END",
+        "SWIPE", "PAT", "TILT", "PICKUP", "PUTDOWN",
+        "BLOW", "CLAP", "VOICE", "PWR",
+    };
+    const char *n = (ev->type >= 0 && ev->type < (int)(sizeof(names) / sizeof(names[0])))
+                        ? names[ev->type] : "?";
+    ESP_LOGI(TAG, "event %s", n);
     if (s_q) {
         xQueueSend(s_q, ev, 0);
     }
     if (display_debug_enabled()) {
-        static const char *names[] = {
-            "TAP", "DOUBLE", "STROKE", "STROKE_END", "HOLD_BEGIN", "HOLD_END",
-            "SWIPE", "PAT", "SHAKE", "TILT", "PICKUP", "PUTDOWN",
-            "BLOW", "CLAP", "VOICE", "PWR",
-        };
-        const char *n = (ev->type >= 0 && ev->type < (int)(sizeof(names) / sizeof(names[0])))
-                            ? names[ev->type] : "?";
         char line[48];
         snprintf(line, sizeof(line), "EV %s", n);
         display_debug_set_line(1, line);

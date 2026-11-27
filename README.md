@@ -76,7 +76,7 @@
 - 图集保留在 SPIFFS，按当前表情读取最大约 481KB 到 PSRAM，不加载完整 11.5MB 图集
 - 轻点下一状态、左滑下一/右滑上一、双击随机
 - PWR 单击下一状态
-- 摇晃/轻拍/吹气推进、拍手随机、说话进入 listening、明显倾斜进入 curious
+- 轻拍/吹气推进、拍手随机、说话进入 listening、明显倾斜进入 curious
 - 拿起暂停、放下恢复，并复用 boop/giggle/yawn 音效
 
 ### 2.2 猫咪 GIF
@@ -85,7 +85,7 @@
 - SPIFFS 流式解码，AnimatedGIF COOKED 模式直接满屏刷新
 - 左右滑动切换、轻点暂停/恢复、双击随机
 - PWR 单击下一张
-- 摇晃/吹气切换、拍手随机、拿起暂停/放下恢复、轻拍播放 boop 音
+- 吹气切换、拍手随机、拿起暂停/放下恢复、轻拍播放 boop 音
 - GIF 启动等待首帧刷新完成，2 秒超时返回失败
 - AnimatedGIF `close()` 后清空关闭回调与文件句柄，避免重复 `fclose`
 
@@ -117,10 +117,12 @@ cmd //c "build.bat -p COM16 app-flash"
 Release 提供 `ESP32-Badge-V0.1.1.bin`，镜像从 `0x0` 开始，已包含 bootloader、分区表、应用和全部媒体，文件大小固定为 32MiB。烧录时选择 ESP32-S3、32MB Flash、DIO、80MHz，写入地址填 `0x0`：
 
 ```bash
-python -m esptool --chip esp32s3 --port COM16 --baud 921600 \
+python -m esptool --chip esp32s3 --port COM16 --baud 460800 \
   write_flash --flash_mode dio --flash_freq 80m --flash_size 32MB \
   0x0 release/ESP32-Badge-V0.1.1.bin
 ```
+
+Flash Download Tool **3.9.11 已验证可烧录**该单文件镜像：选择 ESP32-S3，Flash 为 32MB，SPI Mode 为 DIO、SPI Speed 为 80MHz，勾选 `DoNotChgBin`，bin 地址填 `0x0`，COM 选择实际端口，BAUD 使用 460800。3.9.5 对同一镜像会在 `esp_write_flash` 阶段失败，建议改用 3.9.11。
 
 本地重新生成镜像与 SHA-256：
 

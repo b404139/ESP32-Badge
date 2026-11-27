@@ -238,11 +238,6 @@ static void input_task(void *arg)
             sfx_play(SFX_GIGGLE);
             ESP_LOGI(TAG, "double -> random");
             break;
-        case EV_IMU_SHAKE:
-            s_switch_req = 1;
-            sfx_play(SFX_BOOP);
-            ESP_LOGI(TAG, "shake -> next");
-            break;
         case EV_BUTTON_PWR:
             s_switch_req = 1;
             sfx_play(SFX_BOOP);

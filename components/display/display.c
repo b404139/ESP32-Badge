@@ -73,7 +73,7 @@ IRAM_ATTR static bool refresh_cb(esp_lcd_panel_io_handle_t io, esp_lcd_panel_io_
 // ---- debug text overlay (5x7 font, 2x scale) ----
 // Placed in the vertical middle band (widest part of the round panel) and each line
 // horizontally centered, so the circular glass does not clip the text.
-#define DBG_LINES 6
+#define DBG_LINES 7
 #define DBG_LINE_H 16
 #define DBG_CHAR_W 10
 #define DBG_H (DBG_LINES * DBG_LINE_H)
